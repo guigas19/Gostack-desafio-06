@@ -1,4 +1,3 @@
-// import AppError from '../errors/AppError';
 import { getCustomRepository, getRepository } from 'typeorm';
 
 import Transaction from '../models/Transaction';
@@ -22,41 +21,35 @@ class CreateTransactionService {
   }: Request): Promise<Transaction> {
     const categoryRepository = getRepository(Category);
     const transactionRepository = getCustomRepository(TransactionRepository);
-    const transactions = await transactionRepository.find();
-    const balance = await transactionRepository.getBalance(transactions);
 
-    if (type === 'outcome') {
-      if (value > balance.total)
-        throw new AppError('Saldo insuficiente na conta para essa transação');
-    }
+    const { total } = await transactionRepository.getBalance();
 
-    const categoryExists = await categoryRepository.findOne({
-      where: { title: category },
+    if (type === 'outcome' && value > total)
+      throw new AppError('Saldo insuficiente para essa transação!');
+
+    let transactionCategory = await categoryRepository.findOne({
+      where: {
+        title: category,
+      },
     });
 
-    if (!categoryExists) {
-      const newCategory = categoryRepository.create({
+    if (!transactionCategory) {
+      transactionCategory = categoryRepository.create({
         title: category,
       });
-      await categoryRepository.save(newCategory);
-      const categoryId = newCategory.id;
-      const transaction = transactionRepository.create({
-        title,
-        value,
-        type,
-        category_id: categoryId,
-      });
-      await transactionRepository.save(transaction);
-      return transaction;
+
+      await categoryRepository.save(transactionCategory);
     }
-    const categoryId = categoryExists.id;
+
     const transaction = transactionRepository.create({
       title,
       value,
       type,
-      category_id: categoryId,
+      category: transactionCategory,
     });
+
     await transactionRepository.save(transaction);
+
     return transaction;
   }
 }
